@@ -2,12 +2,12 @@ use std::env;
 
 use axum::{Json, Router, routing::post};
 use dotenvy::dotenv;
+use regex::Regex;
 use serde::Deserialize;
 use serenity::all::{CreateEmbed, ExecuteWebhook, Http, Timestamp, Webhook};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct KeelWebhookPayload {
-    name: String,
     message: String,
     #[serde(rename = "createdAt")]
     created_at: String,
@@ -28,15 +28,7 @@ async fn main() {
 }
 
 async fn handle_webhook(Json(payload): Json<KeelWebhookPayload>) {
-    let timestamp: Timestamp = payload
-        .created_at
-        .parse()
-        .expect("Failed to parse timestamp");
-
-    let embed = CreateEmbed::new()
-        .title(payload.name)
-        .field("message", payload.message, false)
-        .timestamp(timestamp);
+    let embed = create_message(&payload);
 
     let webhook_url = match env::var("DISCORD_WEBHOOK_URL") {
         Ok(url) => url,
@@ -59,4 +51,36 @@ async fn handle_webhook(Json(payload): Json<KeelWebhookPayload>) {
         .execute(&http, false, builder)
         .await
         .expect("Failed to execute webhook");
+}
+
+fn create_message(payload: &KeelWebhookPayload) -> CreateEmbed {
+    let timestamp: Timestamp = payload.created_at.parse().unwrap_or(Timestamp::now());
+    let color = 0x326CE5;
+
+    let re = Regex::new(r"^(.*?)\s*\(([^)]+)\)").unwrap();
+    if let Some(caps) = re.captures(&payload.message) {
+        let description = caps
+            .get(1)
+            .map(|m| m.as_str().trim().to_string())
+            .unwrap_or_default();
+        let image = caps
+            .get(2)
+            .map(|m| m.as_str().trim().to_string())
+            .unwrap_or_default();
+
+        let embed = CreateEmbed::new()
+            .title("Deployment Update")
+            .description(&description)
+            .field("Image", &image, false)
+            .color(color)
+            .timestamp(&timestamp);
+
+        return embed;
+    }
+
+    CreateEmbed::new()
+        .title("Deployment Update")
+        .description(&payload.message)
+        .color(color)
+        .timestamp(&timestamp)
 }

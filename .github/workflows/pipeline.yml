@@ -38,10 +38,10 @@ jobs:
           LOWERCASE_REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "value=$LOWERCASE_REPO" >> "$GITHUB_OUTPUT"
 
-      - name: Extract version from Cargo.toml
-        id: cargo-version
+      - name: Extract version from VERSION file
+        id: app-version
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          version=$(cat VERSION)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
@@ -52,6 +52,6 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ steps.image.outputs.value }}:latest
             ${{ env.REGISTRY }}/${{ steps.image.outputs.value }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ steps.image.outputs.value }}:${{ steps.cargo-version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.image.outputs.value }}:${{ steps.app-version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

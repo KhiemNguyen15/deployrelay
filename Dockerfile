@@ -1,21 +1,15 @@
-# Stage 1: Build static binary using musl
-FROM rust:1.86 AS builder
-
-# Install musl and build dependencies
-RUN apt-get update && apt-get install -y musl-tools pkg-config libssl-dev && \
-    rustup target add x86_64-unknown-linux-musl
+# Stage 1: Build static binary
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Pre-cache dependencies
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release --target x86_64-unknown-linux-musl
-RUN rm -rf src
+# Copy go mod files and download dependencies
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Copy actual source and build again
+# Copy source code and build
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o deployrelay .
 
 # Stage 2: Minimal runtime image
 FROM alpine:latest AS runner
@@ -26,7 +20,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 # Copy static binary
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/deployrelay .
+COPY --from=builder /app/deployrelay .
 
 # Expose the webhook server port
 EXPOSE 3000
